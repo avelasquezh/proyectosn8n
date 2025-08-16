@@ -1,0 +1,311 @@
+{
+  "name": "Bot telegram analisis de mensajes separados",
+  "nodes": [
+    {
+      "parameters": {
+        "executeOnce": false,
+        "command": "=sqlite3 /home/node/n8n-buffer/buffer.db \"SELECT message FROM messages WHERE chat_id = '{{ $('Escuchar').item.json.message.chat.id }}' ORDER BY id ASC;\"\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        64,
+        -672
+      ],
+      "id": "92d91fd3-f5a9-4e3e-aa98-699ce57fec9d",
+      "name": "Leer Historial"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"deepseek/deepseek-r1:free\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Eres un asistente de ventas especializado en edredones. Sigue estrictamente estas reglas:\\n\\n1. CONTEXTO: {{JSON.stringify($json.stdout[0].stdout).replace(/This message was sent automatically with n8n|\\\\d{1,2}:\\\\d{2} (AM|PM)/g, '').replace(/\\\\s+/g, ' ')}}\\n\\n2. INSTRUCCIONES:\\n- Respuestas ultra-concisas (máximo 15 palabras)\\n- Solo responde a la consulta actual\\n- Usa el historial para mantener coherencia\\n- Enfócate en características clave: materiales, tamaños, promociones\\n- No des información no solicitada\\n\\n3. FORMATO:\\n[Respuesta directa] [Relevancia histórica: Sí/No]\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"analiza los mensajes de los ultimos 15 segundos y responde a este mensaje: {{$('Escuchar').item.json.message.text}}\"\n    }\n  ],\n  \"temperature\": 0.3,\n  \"top_p\": 0.9,\n  \"frequency_penalty\": 0.5,\n  \"presence_penalty\": 0.5\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        -672
+      ],
+      "id": "1d33e1cd-7f1e-4c0f-9b5a-85fa6188ba70",
+      "name": "Razonar",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "4xBleKMDMAVvJsjJ",
+          "name": "Bearer Auth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "executeOnce": false,
+        "command": "=sh -c \"sqlite3 /home/node/n8n-buffer/buffer.db \\\"INSERT INTO messages (chat_id, message) VALUES ('{{ $('Escuchar').item.json.message.chat.id }}', '{{ $json.choices[0].message.content }}');\\\"\"\n\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        416,
+        -672
+      ],
+      "id": "90d25b1e-c1a3-4c00-bece-1333619b264f",
+      "name": "Escribir en BBDD"
+    },
+    {
+      "parameters": {
+        "executeOnce": false,
+        "command": "=sqlite3 /home/node/n8n-buffer/buffer.db \"INSERT INTO messages (chat_id, message) VALUES ('{{ $json.message.chat.id }}', '{{ $json.message.text }}');\"\n\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -112,
+        -672
+      ],
+      "id": "79dbbb95-a494-49f0-90ac-ccd8263e19f1",
+      "name": "Guardar en BBDD"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -624,
+        -544
+      ],
+      "id": "1877b2e8-b0c4-4b25-9d2c-d3157f1c1c85",
+      "name": "Escuchar",
+      "webhookId": "cc8ae844-9b46-41da-be45-791377dc7118",
+      "credentials": {
+        "telegramApi": {
+          "id": "HCTjaN5fBxbj9EAY",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Escuchar').item.json.message.chat.id }}",
+        "text": "={{ $('Razonar').item.json.choices[0].message.content }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        592,
+        -672
+      ],
+      "id": "bc5a994d-3852-4322-a746-8a383dbc9a7e",
+      "name": "Responder",
+      "webhookId": "844fee67-b6a1-404c-a635-20552453e1ed",
+      "credentials": {
+        "telegramApi": {
+          "id": "HCTjaN5fBxbj9EAY",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"deepseek/deepseek-r1:free\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"identifica si en este mensaje: {{$('Escuchar').item.json.message.text}} hay una pregunta completa o no, debes responder unicamente si o no\"\n    }\n  ],\n  \"temperature\": 0.3,\n  \"top_p\": 0.9,\n  \"frequency_penalty\": 0.5,\n  \"presence_penalty\": 0.5\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -448,
+        -544
+      ],
+      "id": "7030c271-6bf3-425f-ae3e-87efd0233777",
+      "name": "Razonar1",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "4xBleKMDMAVvJsjJ",
+          "name": "Bearer Auth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1c9e3238-d134-4921-adc3-b0836aca13b7",
+              "leftValue": "={{ $json.choices[0].message.content }}",
+              "rightValue": "sí",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -272,
+        -544
+      ],
+      "id": "83f715f6-eee7-42d8-a59e-fc2d792652e7",
+      "name": "If",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "executeOnce": false,
+        "command": "=sqlite3 /home/node/n8n-buffer/buffer.db \"INSERT INTO messages (chat_id, message) VALUES ('{{ $json.message.chat.id }}', '{{ $json.message.text }}');\"\n\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -112,
+        -432
+      ],
+      "id": "86b1cafb-4ae3-4abb-917d-5bb94007466f",
+      "name": "Guardar en BBDD1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Leer Historial": {
+      "main": [
+        [
+          {
+            "node": "Razonar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Razonar": {
+      "main": [
+        [
+          {
+            "node": "Escribir en BBDD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escribir en BBDD": {
+      "main": [
+        [
+          {
+            "node": "Responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar en BBDD": {
+      "main": [
+        [
+          {
+            "node": "Leer Historial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escuchar": {
+      "main": [
+        [
+          {
+            "node": "Razonar1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Razonar1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Guardar en BBDD",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Guardar en BBDD1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f1659f9a-0748-4a4c-b3ce-c1f7aee27bd2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "7254e4df97aeb4f8f6ff4c3094b057a1ef6e65c8a73181f99fd1f66aaecd80c4"
+  },
+  "id": "0Sc5wNsBIrOjV0W6",
+  "tags": []
+}
