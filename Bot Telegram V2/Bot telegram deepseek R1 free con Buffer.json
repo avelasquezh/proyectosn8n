@@ -1,0 +1,196 @@
+{
+  "name": "Bot telegram deepseek R1 free con Buffer",
+  "nodes": [
+    {
+      "parameters": {
+        "executeOnce": false,
+        "command": "=sqlite3 /home/node/n8n-buffer/buffer.db \"SELECT message FROM messages WHERE chat_id = '{{ $('Escuchar').item.json.message.chat.id }}' ORDER BY id ASC;\"\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        224,
+        -352
+      ],
+      "id": "412e8dfc-5c35-4391-b0f9-5c96cdfd2609",
+      "name": "Leer Historial"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"deepseek/deepseek-r1:free\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Eres un asistente de ventas especializado en edredones. Sigue estrictamente estas reglas:\\n\\n1. CONTEXTO: {{JSON.stringify($json.stdout[0].stdout).replace(/This message was sent automatically with n8n|\\\\d{1,2}:\\\\d{2} (AM|PM)/g, '').replace(/\\\\s+/g, ' ')}}\\n\\n2. INSTRUCCIONES:\\n- Respuestas ultra-concisas (máximo 15 palabras)\\n- Solo responde a la consulta actual\\n- Usa el historial para mantener coherencia\\n- Enfócate en características clave: materiales, tamaños, promociones\\n- No des información no solicitada\\n\\n3. FORMATO:\\n[Respuesta directa] [Relevancia histórica: Sí/No]\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"{{$('Escuchar').item.json.message.text}}\"\n    }\n  ],\n  \"temperature\": 0.3,\n  \"top_p\": 0.9,\n  \"frequency_penalty\": 0.5,\n  \"presence_penalty\": 0.5\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        -352
+      ],
+      "id": "6e938d5b-0fef-4518-80ff-af785716f0cf",
+      "name": "Razonar",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "4xBleKMDMAVvJsjJ",
+          "name": "Bearer Auth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "executeOnce": false,
+        "command": "=sh -c \"sqlite3 /home/node/n8n-buffer/buffer.db \\\"INSERT INTO messages (chat_id, message) VALUES ('{{ $('Escuchar').item.json.message.chat.id }}', '{{ $json.choices[0].message.content }}');\\\"\"\n\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        576,
+        -352
+      ],
+      "id": "ff219515-fdb5-4a8f-85c0-726853355b55",
+      "name": "Escribir en BBDD"
+    },
+    {
+      "parameters": {
+        "executeOnce": false,
+        "command": "=sqlite3 /home/node/n8n-buffer/buffer.db \"INSERT INTO messages (chat_id, message) VALUES ('{{ $json.message.chat.id }}', '{{ $json.message.text }}');\"\n\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        48,
+        -352
+      ],
+      "id": "5bfbb060-295c-493c-8f67-5f38872e3a4e",
+      "name": "Guardar en BBDD"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -128,
+        -352
+      ],
+      "id": "9d8ba76e-5be1-4332-9aab-5fab35ecb2fc",
+      "name": "Escuchar",
+      "webhookId": "58bc37b9-95e3-4c02-8581-2735807fb720",
+      "credentials": {
+        "telegramApi": {
+          "id": "HCTjaN5fBxbj9EAY",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Escuchar').item.json.message.chat.id }}",
+        "text": "={{ $('Razonar').item.json.choices[0].message.content }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        752,
+        -352
+      ],
+      "id": "75fa155c-61b0-4514-9195-eb691ad9d669",
+      "name": "Responder",
+      "webhookId": "11c3271a-f24a-440f-ae90-c99da5d8bf40",
+      "credentials": {
+        "telegramApi": {
+          "id": "HCTjaN5fBxbj9EAY",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Leer Historial": {
+      "main": [
+        [
+          {
+            "node": "Razonar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Razonar": {
+      "main": [
+        [
+          {
+            "node": "Escribir en BBDD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escribir en BBDD": {
+      "main": [
+        [
+          {
+            "node": "Responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar en BBDD": {
+      "main": [
+        [
+          {
+            "node": "Leer Historial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escuchar": {
+      "main": [
+        [
+          {
+            "node": "Guardar en BBDD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "254da317-3ea1-4b3f-8a46-a011ccb34838",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "7254e4df97aeb4f8f6ff4c3094b057a1ef6e65c8a73181f99fd1f66aaecd80c4"
+  },
+  "id": "UXReV9vIm72c2exK",
+  "tags": []
+}
